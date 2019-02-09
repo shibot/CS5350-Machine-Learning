@@ -1,2 +1,2 @@
 # Machine-learning-5350
-This is the repository for Machine Learning 5350 U of U
+This is a machine learning library developed by Your Name for CS5350/6350 in University of Utah
