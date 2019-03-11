@@ -4,18 +4,21 @@ import copy
 import time 
 import statistics 
 import operator
+import random
 
 #This is node class
 class Node:
-	def __init__(self,name):	
-		self.name = name
-		self.branches = dict()
+    children = list()
+    label = ""
+    splitsOn = ""
+    prediction = ""
 
-	def leaf(self):
-		if len(self.branches) == 0:
-			return True
-		else:
-			return False
+    def __init__(self):
+        self.children = list()
+        self.label = ""
+        self.splitsOn = ""
+        self.prediction = ""
+
 
 #   Majority Error Method
 def Majority_Error(Data,label):
@@ -187,7 +190,195 @@ def Common_unknowns(Data,index):
 Columns = ['buying','maint','doors','persons','lug_boot','safety','label']
 Attributes = {'buying':['vhigh','high','med','low'],'maint':['vhigh','high','med','low'],'doors':['2','3','4','5more'],'persons':['2','4','more'],'lug_boot':['small','med','big'],'safety':['low','med','high']}
 
+def id3_with_weight(S, Attributes, MaxDepth, depth):
 
+    if depth == MaxDepth:
+        return mostCommonLabelLeaf(S)
+    labelCheck = S[0]["Label"]
+    allSame = True
+    for s in S:
+        if s["Label"] != labelCheck:
+            allSame = False
+            break
+    if allSame:
+        leaf = Node()
+        leaf.prediction = labelCheck
+        return leaf
+
+    if len(Attributes) == 0:
+        return mostCommonLabelLeaf(S)
+
+    A = InfoGain(S, Attributes)
+
+    root = Node()
+    root.splitsOn = A
+
+    for v in Attributes[A]:
+        Sv = getSv(S, A, v)
+
+        if len(Sv) == 0:
+            leaf = mostCommonLabelLeaf(S, v)
+            root.children.append(leaf)
+        else:
+            tempAttr = dict(Attributes)
+            tempAttr.pop(A)
+            subtree = id3_with_weight(Sv, tempAttr, MaxDepth, depth+1)
+            subtree.label = v
+            root.children.append(subtree)
+    return root
+
+def id3_rand_learn(S, Attributes, NumFeatures):
+    labelCheck = S[0]["Label"]
+    allSame = True
+    for s in S:
+        if s["Label"] != labelCheck:
+            allSame = False
+            break
+    if allSame:
+        leaf = Node()
+        leaf.prediction = labelCheck
+        return leaf
+
+    if len(Attributes) == 0:
+        return mostCommonLabelLeaf(S)
+    A = InfoGain_rand(S, Attributes, NumFeatures)
+
+    root = Node()
+    root.splitsOn = A
+
+    for v in Attributes[A]:
+        Sv = getSv(S, A, v)
+
+        if len(Sv) == 0:
+
+            leaf = mostCommonLabelLeaf(S, v)
+            root.children.append(leaf)
+        else:
+            tempAttr = dict(Attributes)
+            tempAttr.pop(A)
+            subtree = id3_rand_learn(Sv, tempAttr, NumFeatures)
+            subtree.label = v
+            root.children.append(subtree)
+
+    return root
+
+
+def mostCommonLabelLeaf(S, v=None):
+    labels = {}
+    for s in S:
+        label = s["Label"]
+        if label not in labels:
+            labels[label] = 0.0
+        labels[label] += s["Weight"]
+    maxNum = 0
+    maxLabel = ""
+    for label, num in labels.items():
+        if num > maxNum:
+            maxNum = num
+            maxLabel = label
+    leaf = Node()
+    leaf.prediction = maxLabel
+    leaf.label = v
+    return leaf
+
+
+def getSv(S, A, v):
+
+    return [s for s in S if s[A] == v]
+
+
+def values(Attributes, A):
+
+    return Attributes[A]
+
+
+def InfoGain(S, Attributes):
+    entropy = ent_calc(S)
+    maxInfo = -1
+    maxAttr = ""
+    for A in Attributes:
+        infoGain = infohelper(S, Attributes, A, entropy)
+        if infoGain > maxInfo:
+            maxInfo = infoGain
+            maxAttr = A
+    return maxAttr
+
+
+def infohelper(S, Attributes, A, entropy):
+    newEnt = 0.0
+    for v in Attributes[A]:
+        Sv = getSv(S, A, v)
+        ratio = get_len(Sv)/float(get_len(S))
+        ent = ent_calc(Sv)
+        newEnt += ratio * ent
+    return entropy - newEnt
+
+
+def ent_calc(S):
+    if len(S) == 0:
+        return 0
+    labels = {}
+    for s in S:
+        label = s["Label"]
+        if label not in labels:
+            labels[label] = 0.0
+        labels[label] += s["Weight"]
+
+    entropy = 0.0
+    norm = get_len(S) 
+    for (label, quant) in labels.items():
+        ratio = quant/float(norm)
+        entropy -= math.log((ratio), 2) * (ratio)
+
+    return entropy
+
+def InfoGain_rand(S, Attributes, NumFeatures):
+    entropy = ent_calc(S)
+
+    newAttrs = []
+    cpyAttrs = list(Attributes)
+    for _ in range(0, NumFeatures):
+        if len(cpyAttrs) == 0:
+            break
+        rand = random.randint(0, len(cpyAttrs)-1)
+        newAttrs.append(cpyAttrs[rand])
+        del cpyAttrs[rand]
+    maxInfo = -1
+    maxAttr = ""
+    for A in newAttrs:
+        infoGain = infohelper(S, Attributes, A, entropy)
+        if infoGain > maxInfo:
+            maxInfo = infoGain
+            maxAttr = A
+    return maxAttr
+
+def get_len(S):
+    length = 0
+    for s in S:
+        length += s["Weight"]
+    return length
+
+
+def id3_weighted_err(Tree, S):
+    wrong = 0.0
+    for s in S:
+        label = get_label(s, Tree)
+        if label != s["Label"]:
+            wrong += s["Weight"]
+    return wrong
+
+
+def get_label(s, Tree):
+    if Tree.prediction != "":
+        return Tree.prediction
+    
+    newTree = None
+    for node in Tree.children:
+        if node.label == s[Tree.splitsOn]:
+            newTree = node
+            break
+
+    return get_label(s, newTree)
 
 
 data1 = read_csv("./Data_sets/car_train.csv")
